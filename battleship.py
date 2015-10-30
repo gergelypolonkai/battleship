@@ -7,154 +7,109 @@ class FieldType(Enum):
     water = 2
     ship = 3
 
+class ShipOrientation(Enum):
+    unknown = 0
+    none = 1
+    north = 2
+    south = 3
+    east = 4
+    west = 5
+    both = 6
+
 class Field(object):
-    def __init__(self, fieldtype, fixed=False):
-        if not isinstance(fieldtype, FieldType):
-            raise AttributeError("fieldtype must be a FieldType instance")
-
-        self.fixed = fixed
-        self.hidden_type = fieldtype
-        self.player_type = fieldtype if fixed else FieldType.empty
-
-    def is_ship(self, from_fixed=False):
-        return ((self.fixed or from_fixed) \
-                and self.hidden_type == FieldType.ship) \
-            or self.player_type == FieldType.ship
-
-    def is_water(self, from_fixed=False):
-        return ((self.fixed or from_fixed) \
-                and self.hidden_type == FieldType.water) \
-            or self.player_type == FieldType.water
+    def __init__(self):
+        self.__fixed = False
+        self.__type = FieldType.empty
+        self.__marked_type = FieldType.empty
+        self.__orientation = ShipOrientation.none
 
     @property
     def marked_type(self):
-        return self.hidden_type if self.fixed else self.player_type
+        return self.__type if self.__fixed else self.__marked_type
 
-    def __repr__(self):
-        return '<{} field>'.format(self.hidden_type.name)
+    def set_fixed(self, typ=None, orientation=ShipOrientation.unknown):
+        self.__fixed = True
+
+        if typ is not None:
+            self.__type = typ
+            self.__marked_type = typ
+        self.__orientation = orientation
+
+    def __str__(self):
+        typ = self.__type if self.__fixed else self.__marked_type
+
+        if typ == FieldType.empty:
+            return '  '
+        elif typ == FieldType.water:
+            return '~~'
+        elif typ == FieldType.ship:
+            if self.__orientation == ShipOrientation.unknown:
+                return '??'
+            elif self.__orientation == ShipOrientation.none:
+                return '<>'
+            elif self.__orientation == ShipOrientation.north:
+                return '^^'
+            elif self.__orientation == ShipOrientation.south:
+                return 'vv'
+            elif self.__orientation == ShipOrientation.west:
+                return ' <'
+            elif self.__orientation == ShipOrientation.east:
+                return '> '
+            elif self.__orientation == ShipOrientation.both:
+                return 'XX'
+
+    def set_type(self, typ, orientation=ShipOrientation.unknown):
+        self.__type = typ
+        self.__orientation = orientation
 
 class Table(object):
     def __init__(self, width, height):
         self.__fields = []
-        self.width = width
-        self.height = height
+        self.__width = width
+        self.__height = height
+        self.__col_counts = []
+        self.__row_counts = []
+        self.__ships = []
 
-        for x in range(1, width + 1):
+        for count in range(0, height):
             self.__fields.append([])
+            self.__row_counts.append(0)
 
-            for y in range(1, height + 1):
-                self.__fields[x - 1].append(Field(FieldType.water))
+        for count in range(0, width):
+            self.__col_counts.append(0)
 
-    def __border_row(self):
-        ret = Back.WHITE + Fore.BLACK + '+'
+            for row in range(0, height):
+                self.__fields[row].append(Field())
 
-        for i in range(0, self.width):
-            ret += '--+'
+        self.clean()
 
-        ret += "    \n" + Style.RESET_ALL
+    @property
+    def width(self):
+        return self.__width
 
-        return ret
+    @property
+    def height(self):
+        return self.__height
 
-    def field(self, row, col):
-        if row < 0 \
-           or row >= self.height \
-           or col < 0 \
-           or col >= self.width:
-            return None
+    def __check_height(self, row):
+        if row not in range(0, self.__height):
+            raise IndexError("Invalid row number")
 
-        return self.__fields[row][col]
+    def __check_width(self, col):
+        if col not in range(0, self.__width):
+            raise IndexError("Invalid column number")
 
-    def col_ship_count(self, col):
-        return len([r[col] for r in self.__fields \
-                    if r[col].hidden_type == FieldType.ship])
+    def row(self, row):
+        self.__check_height(row)
 
-    def row_ship_count(self, row):
-        return len([r for r in self.__fields[row] \
-                    if r.hidden_type == FieldType.ship])
+        # TODO: This doesn’t feel right
+        return self.__fields[row]
 
-    def __neighbours(self, row, col):
-        return (
-            self.field(row - 2, col -1),
-            self.field(row - 1, col),
-            self.field(row, col - 1),
-            self.field(row - 1, col - 2)
-        )
+    def col(self, col):
+        self.__check_width(col)
 
-    def __str__(self):
-        ret = self.__border_row()
-
-        for row in range(0, self.height):
-            ret += Back.WHITE + Fore.BLACK + '|'
-
-            for col in range(0, self.width):
-                field = self.__fields[row][col]
-
-                typ = field.hidden_type if field.fixed else field.player_type
-
-                if typ == FieldType.empty:
-                    ret += Back.WHITE + '  '
-                elif typ == FieldType.water:
-                    ret += Back.CYAN + Fore.BLUE + '~~'
-                elif typ == FieldType.ship:
-                    # Check neighbours
-
-                    # upper, right, lower, left
-                    neighbours = self.__neighbours(row + 1, col + 1)
-
-                    all_waters = True
-
-                    for n in neighbours:
-                        all_waters = all_waters and \
-                                     (n is None \
-                                      or n.is_water(from_fixed=field.fixed))
-
-                    neighs = [False if n is None \
-                              else n.is_ship(from_fixed=field.fixed) \
-                              for n in neighbours]
-
-                    ret += Back.CYAN
-
-                    # Ship above and below or left and right
-                    if (neighs[0] and neighs[2]) \
-                       or (neighs[1] and neighs[3]):
-                        ret += Fore.RED + 'XX'
-                    elif neighs[0]: # Ship above, not below
-                        ret += Fore.RED + 'vv'
-                    elif neighs[2]: # Ship below, not above
-                        ret += Fore.RED + '^^'
-                    elif neighs[1]: # Ship right, not left
-                        ret += Fore.RED + ' <'
-                    elif neighs[3]: # Ship on left, not right
-                        ret += Fore.RED + '> '
-                    elif all_waters:
-                        ret += Fore.RED + 'oo'
-                    else:
-                        ret += Fore.BROWN + '??'
-
-                ret += Back.WHITE + Fore.BLACK + '|'
-
-            ret += " {:<3}\n".format(self.row_ship_count(row)) + Style.RESET_ALL
-            ret += self.__border_row()
-
-        ret += Back.WHITE + Fore.BLACK
-
-        for col in range(0, self.width):
-            ret += " {:<2}".format(self.col_ship_count(col))
-
-        ret += "     \n" + Style.RESET_ALL
-
-        return ret
-
-    def add_ship(self, start_row, start_col, length, vertical):
-        row, col = start_row - 1, start_col - 1
-
-        for i in range(0, length):
-            self.__fields[row][col].hidden_type = FieldType.ship
-
-            if vertical:
-                row += 1
-            else:
-                col += 1
+        # TODO: This doesn’t feel right
+        return [f[col] for f in f.__fields]
 
     def clean(self):
         for row in self.__fields:
@@ -163,8 +118,44 @@ class Table(object):
                 field.player_type = FieldType.empty
                 field.fixed = False
 
+    def __check_collision(self, parts):
+        pass
+
+    def add_ship(self, start_row, start_col, length, vertical):
+        row, col = start_row - 1, start_col - 1
+        parts = []
+
+        for i in range(0, length):
+            parts.append((row, col))
+
+            if vertical:
+                row += 1
+            else:
+                col += 1
+
+        count = 0
+
+        for row, col in parts:
+            count += 1
+            orientation = ShipOrientation.unknown
+
+            if length == 1:
+                orientation=ShipOrientation.none
+            else:
+                if count == 1:
+                    orientation = ShipOrientation.north if vertical \
+                                  else ShipOrientation.west
+                elif count == length:
+                    orientation = ShipOrientation.south if vertical \
+                                  else ShipOrientation.east
+                else:
+                    orientation = ShipOrientation.both
+
+            self.__fields[row][col].set_type(FieldType.ship,
+                                             orientation=orientation)
+
     def reveal(self, row, col):
-        self.__fields[row - 1][col - 1].fixed = True
+        self.__fields[row - 1][col - 1].set_fixed()
 
     def reveal_all(self):
         for row in self.__fields:
@@ -185,7 +176,37 @@ class Table(object):
         return True
 
     def mark(self, row, col, typ):
-        self.__fields[row][col].player_type = typ
+        field = self.__field(row, col)
+
+        if field is not None:
+            field.player_type = typ
+
+    def is_ship(self, row, col):
+        return self.__fields[row][col].player_type == FieldType.ship
+
+    def __str__(self):
+        def divider():
+            ret = '+'
+
+            for i in range(0, self.__width):
+                ret += '--+'
+
+            ret += "\n"
+
+            return ret
+
+        ret = divider()
+
+        for row in self.__fields:
+            ret += '|'
+
+            for field in row:
+                ret += '{}|'.format(field)
+
+            ret += "\n"
+            ret += divider()
+
+        return ret
 
 class Solver(object):
     def __init__(self, table):
@@ -194,9 +215,8 @@ class Solver(object):
     def mark_edges(self):
         for row in range(0, self.table.height):
             for col in range(0, self.table.width):
-                field = self.table.field(row, col)
-
-                if field.marked_type == FieldType.ship:
+                if self.table.is_ship(row, col):
+                    print("MARK!")
                     self.table.mark(row - 1, col - 1, FieldType.water)
                     self.table.mark(row - 1, col + 1, FieldType.water)
                     self.table.mark(row + 1, col - 1, FieldType.water)
