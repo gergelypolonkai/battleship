@@ -26,6 +26,10 @@ class Field(object):
                 and self.hidden_type == FieldType.water) \
             or self.player_type == FieldType.water
 
+    @property
+    def marked_type(self):
+        return self.hidden_type if self.fixed else self.player_type
+
     def __repr__(self):
         return '<{} field>'.format(self.hidden_type.name)
 
@@ -51,7 +55,7 @@ class Table(object):
 
         return ret
 
-    def __field(self, row, col):
+    def field(self, row, col):
         if row < 0 \
            or row >= self.height \
            or col < 0 \
@@ -70,10 +74,10 @@ class Table(object):
 
     def __neighbours(self, row, col):
         return (
-            self.__field(row - 2, col -1),
-            self.__field(row - 1, col),
-            self.__field(row, col - 1),
-            self.__field(row - 1, col - 2)
+            self.field(row - 2, col -1),
+            self.field(row - 1, col),
+            self.field(row, col - 1),
+            self.field(row - 1, col - 2)
         )
 
     def __str__(self):
@@ -180,6 +184,27 @@ class Table(object):
 
         return True
 
+    def mark(self, row, col, typ):
+        self.__fields[row][col].player_type = typ
+
+class Solver(object):
+    def __init__(self, table):
+        self.table = table
+
+    def mark_edges(self):
+        for row in range(0, self.table.height):
+            for col in range(0, self.table.width):
+                field = self.table.field(row, col)
+
+                if field.marked_type == FieldType.ship:
+                    self.table.mark(row - 1, col - 1, FieldType.water)
+                    self.table.mark(row - 1, col + 1, FieldType.water)
+                    self.table.mark(row + 1, col - 1, FieldType.water)
+                    self.table.mark(row + 1, col + 1, FieldType.water)
+
+    def show(self):
+        print(str(self.table))
+
 colorama.init()
 
 t = Table(6, 6)
@@ -194,4 +219,7 @@ t.reveal(3, 3)
 t.reveal(5, 1)
 t.reveal(5, 2)
 
-print(str(t))
+s = Solver(t)
+s.show()
+s.mark_edges()
+s.show()
