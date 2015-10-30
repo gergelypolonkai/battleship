@@ -1,4 +1,6 @@
 from enum import Enum
+import colorama
+from colorama import Fore, Back, Style
 
 class FieldType(Enum):
     empty = 1
@@ -40,12 +42,12 @@ class Table(object):
                 self.__fields[x - 1].append(Field(FieldType.water))
 
     def __border_row(self):
-        ret = '+'
+        ret = Back.WHITE + Fore.BLACK + '+'
 
         for i in range(0, self.width):
             ret += '--+'
 
-        ret += "\n"
+        ret += "    \n" + Style.RESET_ALL
 
         return ret
 
@@ -78,7 +80,7 @@ class Table(object):
         ret = self.__border_row()
 
         for row in range(0, self.height):
-            ret += '|'
+            ret += Back.WHITE + Fore.BLACK + '|'
 
             for col in range(0, self.width):
                 field = self.__fields[row][col]
@@ -86,9 +88,9 @@ class Table(object):
                 typ = field.hidden_type if field.fixed else field.player_type
 
                 if typ == FieldType.empty:
-                    ret += '  '
+                    ret += Back.WHITE + '  '
                 elif typ == FieldType.water:
-                    ret += '~~'
+                    ret += Back.CYAN + Fore.BLUE + '~~'
                 elif typ == FieldType.ship:
                     # Check neighbours
 
@@ -106,32 +108,36 @@ class Table(object):
                               else n.is_ship(from_fixed=field.fixed) \
                               for n in neighbours]
 
+                    ret += Back.CYAN
+
                     # Ship above and below or left and right
                     if (neighs[0] and neighs[2]) \
                        or (neighs[1] and neighs[3]):
-                        ret += 'XX'
+                        ret += Fore.RED + 'XX'
                     elif neighs[0]: # Ship above, not below
-                        ret += 'vv'
+                        ret += Fore.RED + 'vv'
                     elif neighs[2]: # Ship below, not above
-                        ret += '^^'
+                        ret += Fore.RED + '^^'
                     elif neighs[1]: # Ship right, not left
-                        ret += ' <'
+                        ret += Fore.RED + ' <'
                     elif neighs[3]: # Ship on left, not right
-                        ret += '> '
+                        ret += Fore.RED + '> '
                     elif all_waters:
-                        ret += 'oo'
+                        ret += Fore.RED + 'oo'
                     else:
-                        ret += '??'
+                        ret += Fore.BROWN + '??'
 
-                ret += '|'
+                ret += Back.WHITE + Fore.BLACK + '|'
 
-            ret += " {}\n".format(self.row_ship_count(row))
+            ret += " {:<3}\n".format(self.row_ship_count(row)) + Style.RESET_ALL
             ret += self.__border_row()
+
+        ret += Back.WHITE + Fore.BLACK
 
         for col in range(0, self.width):
             ret += " {:<2}".format(self.col_ship_count(col))
 
-        ret += "\n"
+        ret += "     \n" + Style.RESET_ALL
 
         return ret
 
@@ -173,6 +179,8 @@ class Table(object):
         # TODO: Check if side-numbers equal the number of marked ship-parts
 
         return True
+
+colorama.init()
 
 t = Table(6, 6)
 t.add_ship(1, 3, 1, False)
